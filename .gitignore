@@ -2,6 +2,8 @@
 ./github-file-fetcher/env
 ./github-file-fetcher/venv/
 ./github-file-fetcher/env/
+./github-file-fetcher/Code_Breakdown_Fetch_github_file.md
+./github-file-fetcher/Code_Breakdown_Fetch_github_file_jwt.md
 bedrock-node-project
 bedrock-project
 
