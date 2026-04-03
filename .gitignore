@@ -1,0 +1,11 @@
+# Environments
+./github-file-fetcher/env
+./github-file-fetcher/venv/
+./github-file-fetcher/env/
+bedrock-node-project
+bedrock-project
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class

@@ -1,0 +1,26 @@
+# Create and enter the project directory
+mkdir bedrock-project && cd bedrock-project
+
+# Create a virtual environment
+python3 -m venv venv
+
+# Activate the environment
+source venv/bin/activate
+
+# Upgrade pip first
+pip install --upgrade pip
+
+# Install AWS SDK (Boto3) and GitHub library (PyGithub)
+pip install boto3 PyGithub
+
+# Create and enter the project directory
+mkdir bedrock-node-project && cd bedrock-node-project
+
+# Initialize npm (creates package.json)
+npm init -y
+
+# Install AWS SDK for Bedrock and GitHub Octokit
+npm install @aws-sdk/client-bedrock-runtime @octokit/rest
+
+sudo apt update && sudo apt install awscli -y
+aws configure
