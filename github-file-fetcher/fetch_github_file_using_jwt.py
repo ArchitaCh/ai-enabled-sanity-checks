@@ -1,48 +1,91 @@
-import jwt
-import time
-import requests
 import os
 from dotenv import load_dotenv
+from github import Github, Auth
+from github.GithubException import GithubException, BadCredentialsException
 
-load_dotenv()
+# 4. Secure Private Key Storage
+# In a production cloud environment (AWS/Azure), you would fetch the private key 
+# from Secrets Manager, Key Vault, etc. instead of an environment variable.
+def get_secret(secret_name: str) -> str:
+    # Simulate fetching a secret from a secure vault. Fallback to env vars.
+    secret = os.getenv(secret_name)
+    if not secret:
+        raise ValueError(f"Secret '{secret_name}' not found. Please ensure it is set.")
+    return secret.replace('\\n', '\n')
 
-APP_ID = os.getenv("GITHUB_APP_ID")
-# The private key content should be in your .env or a file
-PRIVATE_KEY = os.getenv("GITHUB_PRIVATE_KEY").replace('\\n', '\n') 
-INSTALLATION_ID = os.getenv("GITHUB_INSTALLATION_ID")
+def main():
+    load_dotenv()
 
-def get_installation_access_token():
-    # 1. Generate JWT
-    payload = {
-        "iat": int(time.time()) - 60,  # Issued 60s ago to avoid clock drift
-        "exp": int(time.time()) + (10 * 60), # Max 10 min expiry
-        "iss": APP_ID
-    }
-    
-    encoded_jwt = jwt.encode(payload, PRIVATE_KEY, algorithm="RS256")
+    try:
+        app_id = int(get_secret("GITHUB_APP_ID"))
+        private_key = get_secret("GITHUB_PRIVATE_KEY")
+    except ValueError as e:
+        print(f"Configuration Error: {e}")
+        return
 
-    # 2. Exchange JWT for Installation Access Token
-    url = f"https://api.github.com/app/installations/{INSTALLATION_ID}/access_tokens"
-    headers = {
-        "Authorization": f"Bearer {encoded_jwt}",
-        "Accept": "application/vnd.github+json"
-    }
-    
-    response = requests.post(url, headers=headers)
-    response.raise_for_status()
-    return response.json()["token"]
+    # 1 & 3: Token Caching & Abstraction using PyGithub
+    # Auth.AppAuth automatically handles JWT creation, token rotation, and caching.
+    try:
+        print("Authenticating as GitHub App...")
+        app_auth = Auth.AppAuth(app_id, private_key)
+        
+        # Create a GitHub client as the App to find installations
+        app_client = Github(auth=app_auth)
+        
+        # 5. Fetch all repositories the App has access to across all installations
+        print("Fetching all installations for the GitHub App...")
+        installations = app_client.get_app().get_installations()
+        
+        if installations.totalCount == 0:
+            print("No installations found for this App. Please install it on a repository or organization.")
+            return
 
-def fetch_file_with_app(owner, repo, file_path):
-    token = get_installation_access_token()
-    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
-    
-    headers = {
-        "Authorization": f"token {token}", # Note: apps often use 'token' or 'Bearer'
-        "Accept": "application/vnd.github.v3.raw"
-    }
-    
-    res = requests.get(url, headers=headers)
-    print(res.text)
+        # Iterate over all accounts/organizations where the App is installed
+        for installation in installations:
+            print(f"\n--- Processing Installation ID: {installation.id} (Account: {installation.account.login}) ---")
+            
+            # Create an installation-specific client. 
+            # This securely gets the installation token and caches it for 1 hour!
+            inst_auth = Auth.AppInstallationAuth(app_auth, installation.id)
+            inst_client = Github(auth=inst_auth)
+            
+            try:
+                # Get all repositories accessible by this specific installation
+                # Note: `installation.get_repos()` fetches the repositories the app is granted access to.
+                repos = installation.get_repos()
+                
+                if repos.totalCount == 0:
+                    print("  No repositories accessible for this installation.")
+                    continue
+                
+                for repo in repos:
+                    print(f"  * Repository found: {repo.full_name}")
+                    
+                    # Example connection: Attempt to fetch a file from the repository
+                    file_path = "README.md"
+                    try:
+                        # Fetch the file using PyGithub objects
+                        # This effectively 'connects' to it and fetches the content
+                        file_content = inst_client.get_repo(repo.full_name).get_contents(file_path)
+                        print(f"    -> Successfully fetched '{file_path}': {file_content.size} bytes.")
+                        # print(file_content.decoded_content.decode('utf-8')) # Optional preview
+                        
+                    except GithubException as e:
+                        # 2. Error Handling for specific GitHub API errors
+                        if e.status == 404:
+                            print(f"    -> '{file_path}' not found in {repo.full_name}.")
+                        elif e.status == 403:
+                            print(f"    -> Permission denied (403) accessing '{file_path}' in {repo.full_name}. Ensure App permissions allow reading repository contents.")
+                        else:
+                            print(f"    -> Error fetching '{file_path}' from {repo.full_name}: {e.data.get('message', e)}")
 
-# Usage
-fetch_file_with_app("owner-name", "repo-name", "path/to/file.py")
+            except GithubException as e:
+                 print(f"  -> Error accessing repositories for installation {installation.id}: {e.data.get('message', e)}")
+                
+    except BadCredentialsException:
+        print("\nError: Authentication failed. Invalid App ID or Private Key.")
+    except Exception as e:
+        print(f"\nAn unexpected error occurred: {e}")
+
+if __name__ == "__main__":
+    main()

@@ -2,8 +2,10 @@
 ./github-file-fetcher/env
 ./github-file-fetcher/venv/
 ./github-file-fetcher/env/
-./github-file-fetcher/Code_Breakdown_Fetch_github_file.md
-./github-file-fetcher/Code_Breakdown_Fetch_github_file_jwt.md
+github-file-fetcher/Code_Breakdown_Fetch_github_file.md
+github-file-fetcher/Code_Breakdown_Fetch_github_file_jwt.md
+github-file-fetcher/Code_Breakdown_Gemini_Code.md
+github-file-fetcher/Local_Testing_Methods_of_the_Gemini_Code.md
 bedrock-node-project
 bedrock-project
 
